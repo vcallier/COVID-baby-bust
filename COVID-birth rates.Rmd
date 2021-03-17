@@ -1,0 +1,232 @@
+---
+title: "COVID and birth rates"
+author: "Viviane Callier"
+date: "3/7/2021"
+output: pdf_document
+---
+
+
+
+##A COVID Baby Bust
+
+It is always difficult to predict the future, but to make an economic forecast, one could do worse than try to read the demographic tea leaves. Demographic trends can hint at what a society will look like several decades into the future. Low birth rates spell trouble down the road because it means a shrinking workforce and a smaller tax base. And that is one reason researchers are concerned that the pandemic has triggered a "baby bust."   
+  
+In the West, lockdowns started in March 2020, meaning that any impact on birth rates wouldn't be seen until November or December 2020 at the earliest. Most states and countries have not yet reported birth rates for such recent months, and so it is difficult to measure any changes with certainty yet. But back in October 2020, a team at the IZA Institute of Labor Economics in Bonn, Germany devised a clever way to predict the impact of the pandemic on birth rates using Google.   
+  
+First, the researchers showed that the search volume for Google keywords related to conception and pregnancy have historically been associated with higher numbers of births a few months later, whereas excess searches for unemployment keywords are associated with a decline in births in the following months. Using statistical learning methods, the researchers identified keywords that were most strongly associated with birth rates, which they separate into the "early indicators" category (that includes words like Clearblue, morning sickness, ovulation, pregnancy test, etc.) and an "unemployment" category (including words like unemployment and layoff).   
+
+Next, they used data on Google searches during the COVID-19 pandemic to forecast fertility rates in the United States. They estimated, based on 2020 unemployment keyword searches, that the number of births in February 2021 would be just 84.3 percent of what they would have been. That 15 percent drop in births, if it materializes, would be on par with the decline in birth rates during the 1918 influenza pandemic and during the Great Depression. Emerging data -- like that from the state of California -- showed a 19 percent drop in December 2020 births compared to December 2019. In Florida, there was about a 7 percent drop in December 2020 births compared to the same month in 2019; the drop was 10 percent in January 2021 and 6 percent in February 2021 compared to the same months in 2020. 
+  
+Uncertainty remains; the jury is still out on most birth rates for February and March of this year, and it is unclear how many births have been simply delayed, rather than forgone altogether. For now, the best we can do is rely on Google to tell us the future birth rates about 9 months out.    
+  
+**
+  
+    
+      
+        
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+
+#loading the data
+FL_data <- read_csv("Florida births/FL-data.csv")
+FL_google.trends <- read_csv("Florida births/multiTimeline.csv")
+
+CA_data <- read_csv("california/CA-data.csv")
+CA_google.trends <- read_csv("california/multiTimeline.csv")
+
+Germany_data <-read_csv("Germany/Germany-data.csv")
+Germany_google.trends <- read_csv("Germany/multiTimeline.csv")
+
+```
+
+
+```{r}
+#Tidying the google search data.
+
+FL_google.trends <- FL_google.trends %>%
+  select(Week,unemployment.Florida) %>%
+  mutate(
+    date = mdy(Week),
+    scaled.google.unemployment = scale(unemployment.Florida)
+  ) %>%
+  select(date, scaled.google.unemployment) 
+```
+
+```{r}
+CA_google.trends <- CA_google.trends %>%
+  select(Week,unemployment.california) %>%
+  mutate(
+    date = mdy(Week),
+    scaled.google.unemployment = scale(unemployment.california)
+  ) %>%
+  select(date, scaled.google.unemployment) 
+  
+```
+
+```{r}
+Germany_google.trends <- Germany_google.trends %>%
+  select(Week,unemployment.Germany) %>%
+  mutate(
+    date = mdy(Week),
+    scaled.google.unemployment = scale(unemployment.Germany)
+  ) %>%
+  select(date, scaled.google.unemployment) 
+  
+```
+
+
+```{r}
+#Tidying the birth and unemployment data.
+
+#Data were scaled so that they could all be plotted on the same graph. 
+
+
+FL_data <- FL_data %>%
+  select(year, month, total.births, unemployment) %>%
+  mutate(
+    date = make_date(year, month),
+    scaled.births = scale(total.births),
+    scaled.unemployment = scale(unemployment)
+  ) %>%
+  select(date,  scaled.births, scaled.unemployment) 
+```
+
+```{r}
+CA_data <- CA_data %>%
+  select(year, month, total.births, unemployment) %>%
+  mutate(
+    date = make_date(year, month),
+    scaled.births = scale(total.births),
+    scaled.unemployment = scale(unemployment)
+  ) %>%
+  select(date,  scaled.births, scaled.unemployment) 
+```
+
+```{r}
+Germany_data <- Germany_data %>%
+  select(year, month, total.births, unemployment) %>%
+  mutate(
+    date = make_date(year, month),
+    scaled.births = scale(total.births),
+    scaled.unemployment = scale(unemployment)
+  ) %>%
+  select(date,  scaled.births, scaled.unemployment) 
+```
+
+
+##Methods. 
+
+All data were scaled before plotting. The scaling function calculates the mean and standard deviation of each variable and then scales each data point by substracting the mean and dividing by the standard deviation. In this way, I could show the trends in all of the data on the same graph.  
+
+I chose to examine California and Florida, because those states had monthly birth data through November 2020 and February 2021 respectively.  
+
+
+##Graphics. 
+
+```{r}
+#Plotting the data. 
+
+
+ ggplot(data = FL_data) +
+  geom_line(aes(x = date, y=scaled.unemployment), color = "darkred", size = 1) + 
+  geom_line(aes(x = date, y=scaled.births), color = "darkblue", size = 1) +
+  geom_line(data = FL_google.trends, aes(x = date, y=scaled.google.unemployment), color = "red", size = 0.5) +
+  geom_rect(
+    aes(xmin = ymd("2020-03-01"), xmax = ymd("2021-3-01"), ymin = -2.1, ymax = 5.2), fill = "grey20", alpha = 0.005 ) + 
+  labs(title="Births and Unemployment in Florida",
+       x = "date",
+       y = "Scaled births, unemployment, and Google searches") 
+
+
+```
+In dark blue: the number of births per month in Florida, scaled. The births were plotted by month of conception. (Florida Department of Health data)  
+In dark red: the number of unemployed people in Florida per month, scaled. (Bureau of Labor statistics data)  
+In red: the number of Google searches for unemployment in Florida each week, scaled. (Google Trends data)  
+  
+  
+The period from March 2020 to March 2021 is shaded in gray.  
+The number of births, plotted by month of conception, drop off at the beginning of the pandemic when the unemployment rate and Google searches for "unemployment" peak. If is unclear how far the births will drop, but they are noticeably breaking from the cyclical pattern in prior years. 
+
+
+```{r}
+ggplot(data = CA_data) +
+  geom_line(aes(x = date, y=scaled.unemployment), color = "darkred", size = 1) + 
+  geom_line(aes(x = date, y=scaled.births), color = "darkblue", size = 1) +
+  geom_line(data = CA_google.trends, aes(x = date, y=scaled.google.unemployment), color = "red", size = 0.5) +
+  geom_rect(
+    aes(xmin = ymd("2020-03-01"), xmax = ymd("2021-3-01"), ymin = -2, ymax = 4.5), fill = "grey20", alpha = 0.005 ) + 
+  labs(title="Births and Unemployment in California",
+       x = "date",
+       y = "Scaled births, unemployment, and Google searches") 
+
+```
+
+In dark blue: the number of births per month in California, scaled. (California Department of Health data)  
+In dark red: the number of unemployed people in California per month, scaled. (Bureau of Labor Statistics data)  
+In red: the number of Google searches for unemployment in California each week, scaled. (Google Trends data)  
+
+The number of births, plotted by month of conception, drop off at the beginning of the pandemic when the unemployment rate and Google searches for "unemployment" peak. If is unclear how far the births will drop, but they are noticeably breaking from the cyclical pattern in prior years. It is interesting that the Google searches for "unemployment" in California match the three big waves of COVID in the United States.   
+
+```{r}
+ggplot(data = Germany_data) +
+  geom_line(aes(x = date, y=scaled.unemployment), color = "darkred", size = 1) + 
+  geom_line(aes(x = date, y=scaled.births), color = "darkblue", size = 1) +
+  geom_line(data = Germany_google.trends, aes(x = date, y=scaled.google.unemployment), color = "red", size = 0.25) +
+  geom_rect(
+    aes(xmin = ymd("2020-03-01"), xmax = ymd("2021-3-01"), ymin = -2, ymax = 5), fill = "grey20", alpha = 0.005 ) + 
+  labs(title="Births and Unemployment in Germany",
+       x = "date",
+       y = "Scaled births, unemployment, and Google searches",
+       color = "Legend") + 
+   scale_color_manual(values = colors)
+```
+
+In dark blue: the number of births per month in Germany, scaled. (German Statistical Agency)  
+In dark red: the number of unemployed people in Germany per month, scaled. (Germany Statistical Agency)  
+In red: the number of Google searches for unemployment in Germany each week, scaled. (Google Trends data)
+
+
+In Germany, the drop in births is less evident than in California and Florida. The Google searches for unemployment are also noisier, and do not match up as clearly with actual unemployment. In countries like Germany with more government/social support, the relationship between unemployment and birth rate may be less strong than it is in the United States. 
+
+
+
+##Reference  
+Wilde J, Chen W, Lohmann S. 2020. COVID-19 and the future of US fertility: What can we learn from Google? IZA Institute of Labor Economics Discussion Paper  
+http://ftp.iza.org/dp13776.pdf   
+    
+
+  
+
+##Data sources
+California Department of Public Health.  
+California births by month.   
+https://www.cdph.ca.gov/Programs/CHSI/CDPH%20Document%20Library/Birth%20and%20Death%20Tables/CA_county_births_by_month.pdf
+  
+Florida Department of Public Health.  
+Florida births by month  
+http://www.flhealthcharts.com/FLQUERY_New/Birth/Count#   
+  
+US Bureau of Labor Statistics.  
+California unemployment rate  
+https://data.bls.gov/timeseries/LASST060000000000005?amp%253bdata_tool=XGtable&output_view=data&include_graphs=true   
+  
+Florida unemployment rate  
+https://www.bls.gov/eag/eag.fl.htm  
+  
+German Statistical Agency  
+Unemployment and birth rates in Germany  
+https://www-genesis.destatis.de  
+    
+Google Trends  
+https://trends.google.com/  
+
+
+
