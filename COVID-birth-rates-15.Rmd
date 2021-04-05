@@ -1,0 +1,538 @@
+---
+title: "The COVID Baby Bust"
+author: "Viviane Callier"
+date: "3/7/2021"
+output:
+  pdf_document: default
+
+---
+
+
+It is always difficult to predict the future, but to make an economic forecast, one could do worse than try to read the demographic tea leaves. Demographic trends can hint at what a society will look like several decades into the future. Low birth rates spell trouble down the road because it means a shrinking workforce and a smaller tax base. And that is one reason researchers are concerned that the pandemic has triggered a "baby bust."   
+  
+In the West, lockdowns started in March 2020, meaning that any impact on birth rates wouldn't be seen until November or December 2020 at the earliest. Most states and countries have not yet reported birth rates for such recent months, and so it is difficult to measure any changes with certainty yet. But back in October 2020, a team at the IZA Institute of Labor Economics in Bonn, Germany devised a clever way to predict the impact of the pandemic on birth rates using Google.    
+  
+First, the researchers showed that, in the United States, the search volume for Google keywords related to conception and pregnancy have historically been associated with higher numbers of births a few months later, whereas excess searches for unemployment keywords are associated with a decline in births in the following months. Using statistical learning methods, the researchers identified keywords that were most strongly associated with birth rates, which they separate into the "early indicators" category (that includes words like Clearblue, morning sickness, ovulation, pregnancy test, etc.) and an "unemployment" category (including words like unemployment and layoff).   
+  
+Next, they used data on Google searches during the COVID-19 pandemic to forecast fertility rates in the United States. They estimated, based on surging 2020 unemployment keyword searches, that the number of births in February 2021 would be just 84.3 percent of what they would have been. That 15 percent drop in births, if it materializes, would be on par with the decline in birth rates during the 1918 influenza pandemic and during the Great Depression. Emerging data -- like that from the state of California -- showed a 19 percent drop in December 2020 births compared to December 2019. In Florida, there was about a 7 percent drop in December 2020 births compared to the same month in 2019; the drop was 10 percent in January 2021 and 6 percent in February 2021 compared to the same months in 2020. Uncertainty remains; the jury is still out on most birth rates for February and March of this year, and it is unclear how many births have been simply delayed, rather than forgone altogether.
+
+The striking association between birth rates and google searches for unemployment raises the question of whether this association is an American phenomenon or whether it exists in other countries, too. In the United States, unemployment may make it significantly more difficult to raise a child, because unemployment benefits are relatively small and the loss of a job is often accompanied by loss of health insurance. Perhaps women are more likely to plan to avoid childbearing in this situation; the stress of job loss could also result in higher risk of miscarriage. In countries with more social spending and social support for families, unemployment may not be so directly linked to births. 
+
+To investigate this question, I expanded the IZA Institute's researchers' study to examine the relationship between google searches for unemployment and births in twenty-eight countries: Australia, Austria, Belgium, Canada, Chile, Costa Rica, Czechia, Denmark, Finland, France, Germany, Greece, Hungary, Ireland, Italy, Japan, Mexico, Netherlands, New Zealand, Norway, Poland, Portugal, South Korea, Spain, Sweden, Switzerland, Turkey, and the United Kingdom. I collected births data in these countries from 2004 to 2020 from the United Nations' website and used Google Translate and Google Trends to download the monthly search volume for 'unemployment' (or the equivalent term in the appropriate language). 
+
+ALthough I was able to obtain the total number of births per month for each country, I could not get a standardized measure (births per 1000 people). For that reason, I did not analyze the data using a single regression with all countries together; instead I did 28 separate regressions, and ran Lasso variable selection procedures for each country to see whether lagged google searches for unemployment were significantly correlated with births a few months down the line. 
+
+I then binned the countries into two different groups: those where there was a significant negative association between births and google searches for unemployment, and those where there wasn't. I hypothesized that social spending (as a percentage of GDP) might predict which group each country belonged to. To investigate that hypothesis, I ran a logistic regression and found that social spending was not significant at a 0.05 significance level (although it was significant at 0.1 level). At this stage, then, it is difficult to know exactly why this association exists in some countries but not others, though it could be worth investigating in an even greater number of countries. It's a mystery even Google can't crack -- yet. 
+
+What's clear, though, is that emerging data show that the baby bust is happening all over the world, not just in the US. Unemployment surely played a role, and its impact has disproportionately hit women, who were pushed out of the workforce at greater rates than men due to lack of childcare and schools going online during the pandemic. The pandemic's disproportionate impact on working women may have further decreased their ability and incentive to have children. Some governments, like in Singapore, Greece, and Italy, have started offering a "baby bonus" to parents for children born during the pandemic. But the jury's still out on whether that'll be enough to buoy birth rates going forward if working conditions for women -- along with affordable childcare and functioning schools -- don't improve soon.   
+
+
+  
+***
+  
+   
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(olsrr)
+library(tree)
+library(dplyr)
+library(glmnet)
+library(car)
+library(broom)
+```
+
+```{r} 
+#loading the data
+FL_data <- read_csv("Florida births/FL-data.csv")
+FL_google.trends <- read_csv("Florida births/multiTimeline.csv")
+
+CA_data <- read_csv("california/CA-data.csv")
+CA_google.trends <- read_csv("california/multiTimeline.csv")
+
+Germany_data <-read_csv("Germany/Germany-data.csv")
+Germany_google.trends <- read_csv("Germany/multiTimeline.csv")
+
+```
+
+
+```{r}
+#Tidying the google search data.
+
+FL_google.trends <- FL_google.trends %>%
+  select(Week,unemployment.Florida) %>%
+  mutate(
+    date = mdy(Week),
+    scaled.google.unemployment = scale(unemployment.Florida)
+  ) %>%
+  select(date, scaled.google.unemployment) 
+```
+
+```{r}
+CA_google.trends <- CA_google.trends %>%
+  select(Week,unemployment.california) %>%
+  mutate(
+    date = mdy(Week),
+    scaled.google.unemployment = scale(unemployment.california)
+  ) %>%
+  select(date, scaled.google.unemployment) 
+  
+```
+
+```{r}
+Germany_google.trends <- Germany_google.trends %>%
+  select(Week,unemployment.Germany) %>%
+  mutate(
+    date = mdy(Week),
+    scaled.google.unemployment = scale(unemployment.Germany)
+  ) %>%
+  select(date, scaled.google.unemployment) 
+  
+```
+
+
+```{r}
+#Tidying the birth and unemployment data.
+
+#Data were scaled so that they could all be plotted on the same graph. 
+
+
+FL_data <- FL_data %>%
+  select(year, month, total.births, unemployment) %>%
+  mutate(
+    date = make_date(year, month),
+    scaled.births = scale(total.births),
+    scaled.unemployment = scale(unemployment)
+  ) %>%
+  select(date,  scaled.births, scaled.unemployment) 
+```
+
+```{r}
+CA_data <- CA_data %>%
+  select(year, month, total.births, unemployment) %>%
+  mutate(
+    date = make_date(year, month),
+    scaled.births = scale(total.births),
+    scaled.unemployment = scale(unemployment)
+  ) %>%
+  select(date,  scaled.births, scaled.unemployment) 
+```
+
+```{r}
+Germany_data <- Germany_data %>%
+  select(year, month, total.births, unemployment) %>%
+  mutate(
+    date = make_date(year, month),
+    scaled.births = scale(total.births),
+    scaled.unemployment = scale(unemployment)
+  ) %>%
+  select(date,  scaled.births, scaled.unemployment) 
+```
+
+
+##Methods. 
+
+All data were scaled before plotting. The scaling function calculates the mean and standard deviation of each variable and then scales each data point by substracting the mean and dividing by the standard deviation. In this way, I could show the trends in all of the data on the same graph.  
+
+I chose to examine California and Florida, because those states had monthly birth data through November 2020 and February 2021 respectively.  
+
+
+##Graphics. 
+
+```{r}
+#Plotting the data. 
+
+
+ ggplot(data = na.omit(FL_data)) +
+  geom_line(aes(x = date, y=scaled.unemployment), color = "darkred", size = 1) + 
+  geom_line(aes(x = date, y=scaled.births), color = "darkblue", size = 1) +
+  geom_line(data = FL_google.trends, aes(x = date, y=scaled.google.unemployment), color = "red", size = 0.5) +
+  geom_rect(
+    aes(xmin = ymd("2020-03-01"), xmax = ymd("2021-3-01"), ymin = -2.1, ymax = 5.2), fill = "grey20", alpha = 0.005 ) + 
+  labs(title="Births and Unemployment in Florida",
+       x = "date",
+       y = "Scaled births, unemployment, and Google searches") 
+
+
+```
+In dark blue: the number of births per month in Florida, scaled. The births were plotted by month of conception. (Florida Department of Health data)  
+In dark red: the number of unemployed people in Florida per month, scaled. (Bureau of Labor statistics data)  
+In red: the number of Google searches for unemployment in Florida each week, scaled. (Google Trends data)  
+  
+  
+The period from March 2020 to March 2021 is shaded in gray.  
+The number of births, plotted by month of conception, drop off at the beginning of the pandemic when the unemployment rate and Google searches for "unemployment" peak. If is unclear how far the births will drop, but they are noticeably breaking from the cyclical pattern in prior years. 
+
+
+```{r}
+ggplot(data = na.omit(CA_data)) +
+  geom_line(aes(x = date, y=scaled.unemployment), color = "darkred", size = 1) + 
+  geom_line(aes(x = date, y=scaled.births), color = "darkblue", size = 1) +
+  geom_line(data = CA_google.trends, aes(x = date, y=scaled.google.unemployment), color = "red", size = 0.5) +
+  geom_rect(
+    aes(xmin = ymd("2020-03-01"), xmax = ymd("2021-3-01"), ymin = -2, ymax = 4.5), fill = "grey20", alpha = 0.005 ) + 
+  labs(title="Births and Unemployment in California",
+       x = "date",
+       y = "Scaled births, unemployment, and Google searches") 
+
+```
+
+In dark blue: the number of births per month in California, scaled. (California Department of Health data)  
+In dark red: the number of unemployed people in California per month, scaled. (Bureau of Labor Statistics data)  
+In red: the number of Google searches for unemployment in California each week, scaled. (Google Trends data)  
+
+The number of births, plotted by month of conception, drop off at the beginning of the pandemic when the unemployment rate and Google searches for "unemployment" peak. If is unclear how far the births will drop, but they are noticeably breaking from the cyclical pattern in prior years. It is interesting that the Google searches for "unemployment" in California match the three big waves of COVID in the United States.   
+
+```{r}
+ggplot(data = na.omit(Germany_data)) +
+  geom_line(aes(x = date, y=scaled.unemployment), color = "darkred", size = 1) + 
+  geom_line(aes(x = date, y=scaled.births), color = "darkblue", size = 1) +
+  geom_line(data = Germany_google.trends, aes(x = date, y=scaled.google.unemployment), color = "red", size = 0.25) +
+  geom_rect(
+    aes(xmin = ymd("2020-03-01"), xmax = ymd("2021-3-01"), ymin = -2, ymax = 5), fill = "grey20", alpha = 0.005 ) + 
+  labs(title="Births and Unemployment in Germany",
+       x = "date",
+       y = "Scaled births, unemployment, and Google searches",
+       color = "Legend") + 
+   scale_color_manual(values = colors)
+```
+
+In dark blue: the number of births per month in Germany, scaled. (German Statistical Agency)  
+In dark red: the number of unemployed people in Germany per month, scaled. (Germany Statistical Agency)  
+In red: the number of Google searches for unemployment in Germany each week, scaled. (Google Trends data)
+
+
+In Germany, the drop in births is less evident than in California and Florida. The Google searches for unemployment are also noisier, and do not match up as clearly with actual unemployment. In countries like Germany with more government/social support, the relationship between unemployment and birth rate may be less strong than it is in the United States. 
+
+
+
+## Data on births and unemployment for 28 countries
+
+```{r}
+#Loading the data
+
+
+#UN Data from the website:
+#http://data.un.org/Data.aspx?d=POP&f=tableCode%3A55
+
+UN.birth.data <- read.csv("~/Dropbox (Personal)/freelance/TheEconomist-birth-rate/UNdata_Export_20210327_002345294b.csv")
+
+
+#Tidying the UN Birth data
+UN.birth.data <- UN.birth.data[which(UN.birth.data$Reliability == "Final figure, complete"),]
+
+UN.birth.data <-  UN.birth.data[which(UN.birth.data$Month != "Total"),]
+
+UN.birth.data <-  UN.birth.data[which(UN.birth.data$Month != "Unknown"),] %>% 
+  select(Country, Month, Year, Value)
+
+#convert month name to month number. 
+UN.birth.data$nMonth = match(UN.birth.data$Month, month.name)
+
+UN.birth.data <- UN.birth.data %>% 
+  mutate(year.month = make_date(Year, nMonth, 1)) %>%
+  select(Country, Year, nMonth, year.month, Value) %>%
+  rename(Births = Value) %>% 
+  mutate(log.births = log(Births))%>%
+  filter(year.month >= as.Date("2007-01-01"))
+
+
+  UN.birth.data$Country[UN.birth.data$Country == "United Kingdom of Great Britain and Northern Ireland"] <- "UK"
+  UN.birth.data$Country[UN.birth.data$Country == "New Zealand"] <- "NewZealand"
+  UN.birth.data$Country[UN.birth.data$Country == "Costa Rica"] <- "CostaRica"
+  UN.birth.data$Country[UN.birth.data$Country == "Republic of Korea"] <- "SKorea"
+
+  UN.birth.data <- UN.birth.data %>% unite(new, Country, year.month)
+  
+#head(UN.birth.data)
+```
+
+```{r}
+#loading the google search data. 
+google.searches.unemployment.1 <- read.csv("~/Dropbox (Personal)/freelance/TheEconomist-birth-rate/google.searches.unemployment.2c.csv")
+
+google.searches.unemployment.1 <- google.searches.unemployment.1 %>%
+  separate(year.month, into = c("year", "month")) %>%
+  mutate(year.month = make_date(year, month, 1)) %>%
+  filter(year.month >= as.Date("2007-01-01")) %>%
+  
+  #scaling the google search data.
+  mutate(Australia = log(Australia/mean(Australia)),
+         Canada = log(Canada/mean(Canada)),
+         Denmark = log(Denmark/mean(Denmark)),
+         Finland = log(Finland/mean(Finland)),
+         France = log(France/mean(France)),
+         Germany = log(Germany/mean(Germany)),
+         Netherlands = log(Netherlands/mean(Netherlands)),
+         NewZealand = log(NewZealand/mean(NewZealand)),
+         Norway = log(Norway/mean(Norway)),
+         Sweden = log(Sweden/mean(Sweden)),
+         UK = log(UK/mean(UK)),
+         Austria = log(Austria/mean(Austria)),
+         Belgium = log(Belgium/mean(Belgium)),
+         Chile = log(Chile/mean(Chile)),
+         CostaRica = log(CostaRica/mean(CostaRica)),
+         Czechia =log(Czechia/mean(Czechia)),
+         Greece = log(Greece/mean(Greece)),
+         Hungary = log(Hungary/mean(Hungary)),
+         Ireland = log(Ireland/mean(Ireland)),
+         Italy = log(Italy/mean(Italy)),
+         Japan = log(Japan/mean(Japan)),
+         Mexico = log(Mexico/mean(Mexico)),
+         Poland = log(Poland/mean(Poland)),
+         Portugal = log(Portugal/mean(Portugal)),
+         SKorea = log(SKorea/mean(SKorea)),
+         Spain = log(Spain/mean(Spain)),
+         Switzerland = log(Switzerland/mean(Switzerland)),
+         Turkey  = log(Turkey/mean(Turkey))
+         ) %>%
+
+
+ gather('Australia', 'Canada', 'Denmark', 'Finland', 'France', 'Germany', 'Netherlands', 'NewZealand', 'Norway', 'Sweden', 'UK', 'Austria', 'Belgium', 'Chile', 'CostaRica', 'Czechia', 'Greece', 'Hungary', 'Ireland', 'Italy', 'Japan', 'Mexico', 'Poland', 'Portugal', 'SKorea', 'Spain', 'Switzerland', 'Turkey', key = 'Country', value = 'google.search') %>%
+ unite(new, Country, year.month) 
+
+#head(google.searches.unemployment.1)
+```
+
+
+```{r}
+#Now merging the two datasets together. 
+
+data1 <- UN.birth.data %>% 
+  inner_join(google.searches.unemployment.1, by = "new") %>%
+  separate(new, into = c("Country", "year", "month", "day")) %>%
+  mutate(year.month = make_date(Year, nMonth, 1)) %>% 
+  mutate(Time = as.numeric(year.month) / 1000) %>%
+  select(Country, year, month, nMonth, year.month, Time, Births, log.births, google.search)
+
+
+#head(data1)
+#dim(data1)
+```
+
+```{r}
+#creating the time lags for google search data
+
+data1 <- data1 %>% 
+  group_by(Country) %>% 
+  mutate(lag1.google.search = lag(google.search, n = 1), 
+         lag2.google.search = lag(google.search, n = 2),
+         lag3.google.search = lag(google.search, n = 3),
+         lag4.google.search = lag(google.search, n = 4),
+         lag5.google.search = lag(google.search, n = 5),
+         lag6.google.search = lag(google.search, n = 6),
+         lag7.google.search = lag(google.search, n = 7),
+         lag8.google.search = lag(google.search, n = 8),
+         lag9.google.search = lag(google.search, n = 9))
+ 
+#head(data1)
+
+#Removing NA and infinity 
+data2 = na.omit(data1) %>%
+  filter_all(all_vars(!is.infinite(.)))
+
+
+  
+
+```
+
+```{r}
+ggplot(data2)+
+  geom_point(mapping = aes(x = lag6.google.search, y = log.births, color = Country))
+```
+
+
+
+To account for the periodic annual cycle, I include a third level polynomial for "month" in my linear regression model. I also include 'year' as a predictor to account for any trends over time. 
+
+
+```{r}
+#creating one big model for all countries together.
+
+#linear model with interactions
+
+lm.births.interactions = lm(log.births ~ Country + as.numeric(year) + poly(nMonth,3) + google.search + lag1.google.search + lag2.google.search + lag3.google.search + lag4.google.search + lag5.google.search + lag6.google.search + lag7.google.search + lag8.google.search + lag9.google.search + google.search*Country + lag1.google.search*Country + lag2.google.search*Country + lag3.google.search*Country + lag4.google.search*Country + lag5.google.search*Country + lag6.google.search*Country + lag7.google.search*Country + lag8.google.search*Country + lag9.google.search*Country, data = data2)
+
+#summary(lm.births.interactions)
+#births.stepwise2 = ols_step_both_p(lm.births.interactions, pent = 0.00001, prem = 0.00001)
+#births.stepwise2$model
+
+```
+
+The google search and lags 2, 4, 5, 6, and 8 interact with the countries; these are significant interactions based on the stepwise regression procedure. For some countries, the coefficients are negative (as expected) but for others, the coefficient is positive (which is not expected).
+
+
+
+
+I wanted to investigate, for each country, which predictors are significant. So I ran individual regressions by country and tested the significant predictors: 
+
+
+```{r}
+my_lm <- function(df){
+  summary(lm(log.births ~ poly(nMonth,3) + as.numeric(year) + google.search + lag1.google.search + lag2.google.search + lag3.google.search + lag4.google.search + lag5.google.search + lag6.google.search + lag7.google.search + lag8.google.search + lag9.google.search, data = df))
+}
+by(data2, data2$Country, my_lm)
+
+```
+
+```{r}
+by_country <- group_by(data2, Country)
+
+data3 <- do(by_country, 
+   tidy(
+     lm(log.births ~ poly(nMonth,3) + as.numeric(year) + google.search + lag1.google.search + lag2.google.search + lag3.google.search + lag4.google.search + lag5.google.search + lag6.google.search + lag7.google.search + lag8.google.search + lag9.google.search, data =.)
+   ))
+
+```
+
+
+After running these 28 regressions, I wanted to do a variable selection procedure for each country. So I ran a Lasso regression (with cross validation) to select the significant predictors for each country. 
+
+
+```{r}
+
+
+#creating an index for each country, and adding it to the dataset.
+country.number <- read.csv("~/Dropbox (Personal)/freelance/TheEconomist-birth-rate/country.number.csv")
+data4 <- data2 %>% 
+  inner_join(country.number, by = "Country") 
+
+output <- double()
+
+#implementing a lasso regression/variable selection procedure for each country
+
+for (i in 1:28) { 
+
+ if(i == 10) next #skipping France because the glmnet function was giving an error because there is not enough variation in log.births
+  
+x=model.matrix(log.births ~ as.numeric(year) + nMonth + I(nMonth^2) + I(nMonth^3) + google.search + lag1.google.search + lag2.google.search + lag3.google.search + lag4.google.search + lag5.google.search + lag6.google.search + lag7.google.search + lag8.google.search + lag9.google.search, data = data4[which(data4$country.number == i),])[,-1]
+
+y=data4[which(data4$country.number == i),]$log.births
+
+grid=10^seq(10,-2,length=100)
+ridge.mod=glmnet(x, y, alpha = 0, lambda = grid)
+
+#splitting the data into training and validation sets, doing the ridge regression, and cross-validation.
+
+set.seed(1)
+train=sample(1:nrow(x), nrow(x)/2)
+test=(-train)
+y.test=y[test]
+
+lasso.mod=glmnet(x[train,],y[train], alpha = 1, lambda = grid)
+
+#Performing cross validation and computing the test error. 
+
+set.seed(1)
+cv.out=cv.glmnet(x[train,],y[train],alpha=1)
+bestlam=cv.out$lambda.min
+lasso.pred = predict(lasso.mod, s=bestlam, newx=x[test,])
+
+
+out = glmnet(x,y, alpha=1, lambda = grid)
+lasso.coef=predict(out, type="coefficients", s=bestlam)[1:14,]
+c(sum(lasso.coef==0), sum(lasso.coef!=0))
+#lasso.coef[lasso.coef==0]
+print(i)
+print(lasso.coef[lasso.coef!=0])
+
+} 
+
+
+```
+
+```{r}
+#France 
+#variable selection through stepwise regression. shows that there is no significant correlation between log.births and google searches.
+
+lm.france = lm(log.births ~ poly(nMonth,3) + as.numeric(year) + google.search + lag1.google.search + lag2.google.search + lag3.google.search + lag4.google.search + lag5.google.search + lag6.google.search + lag7.google.search + lag8.google.search + lag9.google.search, data = data4[which(data4$country.number == 10),])
+
+ols_step_both_p(lm.france, pent = 0.1, prem = 0.1)
+
+```
+
+
+
+
+I used the output of the lasso regression by group to determine which countries had a significant relationship between unemployment and births, and which ones did not. 
+
+Then, I binned the countries into two groups, and I ran a logistic regression to see if social spending as a percent of GDP could predict which group a country belongs to. 
+
+
+```{r}
+#now comparing the group of countries where unemployment searches were predictive of births vs. those where there was no relationship. Do these two groups differ in the amount of social spending? in the average fertility rate?  
+
+# https://data.oecd.org/socialexp/social-spending.htm 
+
+# data on fertility rates were downloaded from the UN website
+
+
+OECD_social_spending_summary <- read.csv("~/Dropbox (Personal)/freelance/TheEconomist-birth-rate/OECD_social_spending_summary2.csv")
+
+no.prediction <- OECD_social_spending_summary[which(OECD_social_spending_summary$unemployment.predictor == "n"),]
+
+prediction <- OECD_social_spending_summary[which(OECD_social_spending_summary$unemployment.predictor == "y"),]
+
+
+glm.fits1 = glm(as.factor(unemployment.predictor) ~ social.spending, data = OECD_social_spending_summary, family = binomial)
+summary(glm.fits1)
+
+
+
+```
+
+
+The results show that a country's social spending is not significant (at level 0.05) at predicting whether there is a relationship between births and google searches for unemployment. It is significant at the level 0.1 ( p = 0.0985). More data and a greater sample size would be needed to investigate this further. 
+
+
+   
+    
+    
+      
+##Reference  
+Wilde J, Chen W, Lohmann S. 2020. COVID-19 and the future of US fertility: What can we learn from Google? IZA Institute of Labor Economics Discussion Paper  
+http://ftp.iza.org/dp13776.pdf   
+    
+https://abcnews.go.com/International/baby-boom-baby-bust-pandemic-lasting-effect-birth/story?id=76676586
+  
+
+##Data sources
+
+California Department of Public Health.  
+California births by month.   
+https://www.cdph.ca.gov/Programs/CHSI/CDPH%20Document%20Library/Birth%20and%20Death%20Tables/CA_county_births_by_month.pdf
+  
+Florida Department of Public Health.  
+Florida births by month  
+http://www.flhealthcharts.com/FLQUERY_New/Birth/Count#   
+  
+US Bureau of Labor Statistics.  
+California unemployment rate  
+https://data.bls.gov/timeseries/LASST060000000000005?amp%253bdata_tool=XGtable&output_view=data&include_graphs=true   
+  
+Florida unemployment rate  
+https://www.bls.gov/eag/eag.fl.htm  
+  
+German Statistical Agency  
+Unemployment and birth rates in Germany  
+https://www-genesis.destatis.de  
+
+    
+Google Trends  
+https://trends.google.com/  
+
+UN Data for births in different countries:
+http://data.un.org/Data.aspx?d=POP&f=tableCode%3A55
+
+UN Data for total population in different countries: 
+http://data.un.org/Data.aspx?q=population&d=PopDiv&f=variableID%3a12 
+
+Social spending data
+https://data.oecd.org/socialexp/social-spending.htm 
+
